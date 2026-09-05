@@ -549,9 +549,14 @@
         if (NA.Waves && NA.Waves.draftCards && NA.Game) n = NA.Waves.draftCards(NA.Game.wave) | 0;
         else if (NA.Waves && NA.Waves.current && NA.Waves.current.draftCards) n = NA.Waves.current.draftCards | 0;
       }
-      if (!n) n = 3;
+      if (!n) n = 5;
       if (NA.Game && NA.Game.nextDraftCards) { n = NA.Game.nextDraftCards | 0; NA.Game.nextDraftCards = 0; }
       n += Draft.bonusCards; Draft.bonusCards = 0;
+      /* Owner request: a draft is FIVE cards, always -- the wave table's 3/4
+       * only ever raises the floor now, never lowers it. Scripted single-card
+       * moments (a boss handing you one card) still pass count explicitly and
+       * are respected, so the floor applies to the normal between-wave draft. */
+      if (!(count | 0)) n = Math.max(n, 5);
       Draft.count = M.clamp(n, 1, 5);
       Draft.offers = NA.Upgrades.offer(Draft.count, NA.RNG);
       Draft.hover = -1; Draft.t = 0; Draft.picked = -1;
@@ -1323,15 +1328,22 @@
     tickDeath: function (dt) {
       var G = NA.Game;
       if (G.stateT < 1.2) return;
+      /* Infinite lives: THREE gates now.  The primary one (above the wreck,
+       * the one 'confirm' also triggers) replays the wave you died on with
+       * your build intact; gate2 starts a fresh run from wave 1; gate3 goes
+       * home.  Continuing is the default because this is a fun game, not a
+       * fair one -- the price of a death is the counter, nothing else. */
       if (!UI.gate.active && !UI.gate.passed) {
         UI.resetGate(NA.Player.x, NA.Player.y - 330);
+        UI.setGate2(NA.Player.x - 330, NA.Player.y + 190, 'restart');
         UI.setGate3(NA.Player.x + 330, NA.Player.y + 190);
       }
       if (UI.gateEntered() || NA.Input.pressed('confirm') || padPressed(0)) {
         NA.Time.setTimeScale(1);
-        G.restart();
+        G.continueRun();
         return;
       }
+      if (UI.gate2Entered()) { NA.Time.setTimeScale(1); G.restart(); return; }
       if (UI.gate3Entered()) { NA.Time.setTimeScale(1); G.toTitle(); }
     },
 
@@ -1557,7 +1569,9 @@
         R.ring(L.VEIL, P.x - s2, P.y - 240, s2, 2.2, gc[0], gc[1], gc[2], 0.8 * k);
         R.ring(L.VEIL, P.x + s2, P.y - 240, s2, 2.2, gc[0], gc[1], gc[2], 0.8 * k);
       }
-      UI.renderGate(UI.gate, paletteOf('core'), true);
+      UI.gate.kind = 'endless';        // the continue gate wears the infinity ring
+      UI.renderGate(UI.gate, paletteOf('gold'), true);
+      UI.renderGate(UI.gate2, paletteOf('core'), false);
       UI.renderGate(UI.gate3, paletteOf('player'), false);
     },
 
@@ -1933,12 +1947,56 @@
     }
   }
 
+  /* Death tally -- zero text (AGENT_RULES 5), so the count is pips: one dim
+   * dot per death, and every tenth death collapses into one bright dot on the
+   * row above.  Reads at a glance up to a few hundred, which is more deaths
+   * than any run will survive the patience for. */
+  function drawDeathTally(ctx, u, y, alpha) {
+    var n = (NA.Game && NA.Game.deaths) | 0;
+    if (n <= 0) return;
+    var tens = (n / 10) | 0, ones = n % 10;
+    var cx = NA.R.w * 0.5, gap = 11 * u, i, x0;
+    ctx.save();
+    if (tens > 0) {
+      var tn = Math.min(tens, 40);
+      x0 = cx - (tn - 1) * gap * 0.5;
+      ctx.fillStyle = hx('gold');
+      for (i = 0; i < tn; i++) {
+        ctx.globalAlpha = alpha;
+        ctx.beginPath(); ctx.arc(x0 + i * gap, y, 3.4 * u, 0, M.TAU); ctx.fill();
+      }
+    }
+    if (ones > 0) {
+      x0 = cx - (ones - 1) * gap * 0.5;
+      ctx.fillStyle = hx('white');
+      for (i = 0; i < ones; i++) {
+        ctx.globalAlpha = alpha * 0.5;
+        ctx.beginPath();
+        ctx.arc(x0 + i * gap, y + (tens > 0 ? 13 * u : 0), 2.4 * u, 0, M.TAU);
+        ctx.fill();
+      }
+    }
+    ctx.globalAlpha = 1;
+    ctx.restore();
+  }
+
   function drawDeathOverlay(ctx, I, u) {
     var G = NA.Game; if (!G) return;
+    if (UI.gate.active) {
+      /* the continue gate reads as the endless glyph: the run does not end */
+      var pc = w2s(UI.gate.x, UI.gate.y);
+      I.draw(ctx, 'infinity', pc.x, pc.y, 44 * u,
+        { color: hx('gold'), glow: pulse(0.8, 0.55, 0.9), alpha: 0.95 });
+    }
+    if (UI.gate2.active) {
+      var pr = w2s(UI.gate2.x, UI.gate2.y);
+      I.draw(ctx, 'reroll', pr.x, pr.y, 32 * u, { color: hx('white'), glow: 0.4, alpha: 0.7 });
+    }
     if (UI.gate3.active) {
       var ph = w2s(UI.gate3.x, UI.gate3.y);
       I.draw(ctx, 'home', ph.x, ph.y, 34 * u, { color: hx('player'), glow: 0.5, alpha: 0.85 });
     }
+    drawDeathTally(ctx, u, 26 * u, 0.75);
     var picks = G.picks || [];
     if (!picks.length) return;
     /* the upgrade timeline strip: what you took, in the order you took it */
@@ -1992,6 +2050,8 @@
       I.boss(ctx, bosses[i], ctr.x + Math.cos(a2) * rr2, ctr.y + Math.sin(a2) * rr2, 34 * u,
         { color: hx('gold'), alpha: 0.8 * fade * k2 });
     }
+    /* the run's death tally, under the upgrade ring */
+    drawDeathTally(ctx, u, NA.R.h - 120 * u, 0.85 * fade);
     if (UI.endPhase >= 6) {
       /* the Encore hex peeking through the crack */
       var pe = w2s(cx, cy - 250);

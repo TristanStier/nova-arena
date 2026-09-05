@@ -17,6 +17,8 @@
  *   NA.Game.picks / bossesBeaten  this run's history (used by death + ending)
  *   NA.Game.replay / replayN / replayHead / REPLAY_MAX / killerX / killerY
  *   NA.Game.nextDraftCards        set to 4/5 to widen the next draft
+ *   NA.Game.continueRun()         infinite lives: replay the wave you died on
+ *   NA.Game.deaths                deaths so far this run (shown at the end)
  *   NA.Game.step(dt)   one fixed simulation step
  *   NA.Game.render()
  *   NA.Game.frame(ts)  the rAF callback (installed by 99_boot.js)
@@ -85,6 +87,7 @@
       NA.UI.reset();
       NA.Time.setTimeScale(1);
       G.wave = 0;
+      G.deaths = 0;
       G.paused = false; G.endless = false; G.newRecord = false;
       G.picks.length = 0; G.bossesBeaten.length = 0;
       G.replayN = 0; G.replayHead = 0; G._replayT = 0;
@@ -126,6 +129,37 @@
       G.newRun();
       NA.Cam.setZoom(1, 0);
       G.startWave(1);
+    },
+
+    /* ------------------------------------------------- infinite lives
+     * Owner request: dying never ends the run.  The death screen's primary
+     * gate calls this: the wave you died on restarts with your build, your
+     * picks and your boss log intact, the death counter ticks up by one, and
+     * the counter is what the ending screen reports instead of a life total.
+     * Nothing is taken away from you here (AGENT_RULES 7) -- the only cost of
+     * a death is the number on the wall at the end. */
+    continueRun: function () {
+      var w = G.wave || 1;
+      NA.Enemies.reset();
+      NA.Bullets.reset();
+      NA.Particles.clear();
+      NA.Bosses.clear();
+      NA.Events.reset();
+      NA.FX.reset();
+      NA.UI.reset();
+      NA.Player.reset();
+      NA.Upgrades.reapply();          // the build survives; stats come back
+      NA.R.setPost({ darkness: 0, desat: 0 });
+      if (NA.Audio && NA.Audio.music && NA.Audio.music.setLowpass) NA.Audio.music.setLowpass(0);
+      G.paused = false;
+      G._draftReturn = '';
+      NA.Time.setTimeScale(1);
+      NA.Cam.x = NA.Cam.tx = NA.Player.x; NA.Cam.y = NA.Cam.ty = NA.Player.y;
+      NA.Cam.setZoom(1, 0);
+      // a boss wave re-enters through toBoss so the fight is rebuilt properly
+      var wd = NA.Waves.get(w);
+      if (wd && wd.boss) { G.wave = w; NA.Waves.start(w); G.toBoss(); }
+      else G.startWave(w);
     },
 
     /* Dev entry: ?wave=N starts there with a plausible build. */
@@ -558,6 +592,9 @@
 
   // player death routes into the death state
   G.on('playerDeath', function () {
+    G.deaths = (G.deaths | 0) + 1;   // counted here so the death screen's own
+                                     // tally already includes the death you
+                                     // are looking at
     G.findKiller();
     G.saveRunRecord();
     if (NA.Audio && NA.Audio.music && NA.Audio.music.setLowpass) NA.Audio.music.setLowpass(0.8);

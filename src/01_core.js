@@ -31,8 +31,10 @@ NA.C = {
   // the same 1.1176 so a shrink wave closes to the same fraction of the arena
   // and feels identical. Every other arena distance in src/ is expressed as a
   // multiple of C.ARENA_R / C.ARENA_MIN_R, so both scale with these two.
-  ARENA_R: 1900,
-  ARENA_MIN_R: 514,
+  // Pacing pass: arena pulled in 1900 -> 1650 so fights are denser and you
+  // cross the ring faster; ARENA_MIN_R scaled by the same 0.868.
+  ARENA_R: 1650,
+  ARENA_MIN_R: 446,
   SHIP_R: 10,
   // The world window visible at zoom 1 on a 16:9 screen.
   // History: 1100x620 -> 1430x806 -> 2400x1350.  The owner could not read the
@@ -42,7 +44,9 @@ NA.C = {
   // request, this is now the ONE combat zoom: regular waves and boss fights
   // are framed identically (see NA.Game.frame, which pins Cam.tzoom to 1).
   // fitArena() is unaffected (it solves for the arena, not for VIEW_W).
-  VIEW_W: 3000, VIEW_H: 1688,
+  // ...and then to 3400 (~103% of the 3300-unit arena diameter) so the whole
+  // fight reads at once.
+  VIEW_W: 3400, VIEW_H: 1913,
 
   MAX_ENEMIES: 1024,
   MAX_PBULLETS: 6144,

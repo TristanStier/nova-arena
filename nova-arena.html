@@ -85,8 +85,10 @@ NA.C = {
   // the same 1.1176 so a shrink wave closes to the same fraction of the arena
   // and feels identical. Every other arena distance in src/ is expressed as a
   // multiple of C.ARENA_R / C.ARENA_MIN_R, so both scale with these two.
-  ARENA_R: 1900,
-  ARENA_MIN_R: 514,
+  // Pacing pass: arena pulled in 1900 -> 1650 so fights are denser and you
+  // cross the ring faster; ARENA_MIN_R scaled by the same 0.868.
+  ARENA_R: 1650,
+  ARENA_MIN_R: 446,
   SHIP_R: 10,
   // The world window visible at zoom 1 on a 16:9 screen.
   // History: 1100x620 -> 1430x806 -> 2400x1350.  The owner could not read the
@@ -96,7 +98,9 @@ NA.C = {
   // request, this is now the ONE combat zoom: regular waves and boss fights
   // are framed identically (see NA.Game.frame, which pins Cam.tzoom to 1).
   // fitArena() is unaffected (it solves for the arena, not for VIEW_W).
-  VIEW_W: 3000, VIEW_H: 1688,
+  // ...and then to 3400 (~103% of the 3300-unit arena diameter) so the whole
+  // fight reads at once.
+  VIEW_W: 3400, VIEW_H: 1913,
 
   MAX_ENEMIES: 1024,
   MAX_PBULLETS: 6144,
@@ -6853,15 +6857,22 @@ window.NA = window.NA || {};
     if (vn > 0) { P.vx[i] -= nx * vn; P.vy[i] -= ny * vn; }
   }
 
+  /* Pacing pass (owner request): every NON-BOSS enemy is a little bigger, so
+   * it is easier to hit at the wider camera, and a little faster, so waves
+   * come to you instead of being chased.  One funnel, so it covers all 42
+   * enemy defs plus anything a boss spawns as a minion.  Bosses have their own
+   * registry (13_bosses.js) and are untouched. */
+  var SIZE_MUL = 1.25, SPEED_MUL = 1.12;
+
   function normalize(id, def) {
     var d = def || {};
     return {
       id: id,
       shape: d.shape || 'circle',
       color: d.color || C.COL.white,
-      size: d.size || 12,
+      size: (d.size || 12) * SIZE_MUL,
       hp: d.hp || 10,
-      speed: d.speed || 100,
+      speed: (d.speed || 100) * SPEED_MUL,
       cost: d.cost || 1,
       band: d.band || 'A',
       retireWave: d.retireWave || 0,
@@ -10518,6 +10529,31 @@ window.NA = window.NA || {};
       s.pierce += m.pierce; s.bounce += m.bounce; s.homing += m.homing;
       s.explode += m.explodeRadius; s.count += m.count; s.spread += m.spread;
       if (s.count > 1 && s.spread <= 0) s.spread = 0.12;
+      /* ------------------------------------------------------- RESONANCE
+       * Owner request: a stacked build has to become uniquely overpowered,
+       * not merely additive.  Every tier you own -- of anything -- feeds one
+       * superlinear multiplier applied AFTER the mods fold, so the curve is
+       * flat at the start of a run and vertical at the end of one.
+       *
+       *   T tiers owned:  dmg x (1 + 0.05*T + 0.004*T^2)
+       *     T=3  -> 1.19x     T=10 -> 1.90x
+       *     T=20 -> 3.60x     T=32 -> 6.70x
+       *
+       * Fire rate rides a gentler linear curve (the sim, the audio and the
+       * bullet pools all have to survive it), and every 9th tier hands out a
+       * free pierce, which is what actually turns a late build into a beam.
+       * Nothing here can go down: this is purely additive on top of the
+       * build you chose (AGENT_RULES 7). */
+      var T = 0;
+      for (var rid in U.owned) T += U.owned[rid] | 0;
+      if (T > 0) {
+        s.damage *= 1 + 0.05 * T + 0.004 * T * T;
+        s.fireRate *= 1 + 0.020 * T;
+        s.pierce += (T / 9) | 0;
+        s.manaTrickle *= 1 + 0.020 * T;
+      }
+      U.resonance = T;
+
       var st = U.statics;
       for (k in st) st[k] = s[k];
       NA.Player.grazeMul = s.grazeMul;
@@ -10598,7 +10634,7 @@ window.NA = window.NA || {};
      */
     offer: function (count, rng) {
       rng = rng || NA.RNG;
-      count = count || ((NA.Game && NA.Game.wave && NA.Game.wave % 6 === 0) ? 4 : 3);
+      count = count || 5;
       var out = OUT; out.length = 0;
       var pool = POOL; pool.length = 0;
       var i, id, d;
@@ -28742,9 +28778,14 @@ window.NA = window.NA || {};
         if (NA.Waves && NA.Waves.draftCards && NA.Game) n = NA.Waves.draftCards(NA.Game.wave) | 0;
         else if (NA.Waves && NA.Waves.current && NA.Waves.current.draftCards) n = NA.Waves.current.draftCards | 0;
       }
-      if (!n) n = 3;
+      if (!n) n = 5;
       if (NA.Game && NA.Game.nextDraftCards) { n = NA.Game.nextDraftCards | 0; NA.Game.nextDraftCards = 0; }
       n += Draft.bonusCards; Draft.bonusCards = 0;
+      /* Owner request: a draft is FIVE cards, always -- the wave table's 3/4
+       * only ever raises the floor now, never lowers it. Scripted single-card
+       * moments (a boss handing you one card) still pass count explicitly and
+       * are respected, so the floor applies to the normal between-wave draft. */
+      if (!(count | 0)) n = Math.max(n, 5);
       Draft.count = M.clamp(n, 1, 5);
       Draft.offers = NA.Upgrades.offer(Draft.count, NA.RNG);
       Draft.hover = -1; Draft.t = 0; Draft.picked = -1;
@@ -29516,15 +29557,22 @@ window.NA = window.NA || {};
     tickDeath: function (dt) {
       var G = NA.Game;
       if (G.stateT < 1.2) return;
+      /* Infinite lives: THREE gates now.  The primary one (above the wreck,
+       * the one 'confirm' also triggers) replays the wave you died on with
+       * your build intact; gate2 starts a fresh run from wave 1; gate3 goes
+       * home.  Continuing is the default because this is a fun game, not a
+       * fair one -- the price of a death is the counter, nothing else. */
       if (!UI.gate.active && !UI.gate.passed) {
         UI.resetGate(NA.Player.x, NA.Player.y - 330);
+        UI.setGate2(NA.Player.x - 330, NA.Player.y + 190, 'restart');
         UI.setGate3(NA.Player.x + 330, NA.Player.y + 190);
       }
       if (UI.gateEntered() || NA.Input.pressed('confirm') || padPressed(0)) {
         NA.Time.setTimeScale(1);
-        G.restart();
+        G.continueRun();
         return;
       }
+      if (UI.gate2Entered()) { NA.Time.setTimeScale(1); G.restart(); return; }
       if (UI.gate3Entered()) { NA.Time.setTimeScale(1); G.toTitle(); }
     },
 
@@ -29750,7 +29798,9 @@ window.NA = window.NA || {};
         R.ring(L.VEIL, P.x - s2, P.y - 240, s2, 2.2, gc[0], gc[1], gc[2], 0.8 * k);
         R.ring(L.VEIL, P.x + s2, P.y - 240, s2, 2.2, gc[0], gc[1], gc[2], 0.8 * k);
       }
-      UI.renderGate(UI.gate, paletteOf('core'), true);
+      UI.gate.kind = 'endless';        // the continue gate wears the infinity ring
+      UI.renderGate(UI.gate, paletteOf('gold'), true);
+      UI.renderGate(UI.gate2, paletteOf('core'), false);
       UI.renderGate(UI.gate3, paletteOf('player'), false);
     },
 
@@ -30126,12 +30176,56 @@ window.NA = window.NA || {};
     }
   }
 
+  /* Death tally -- zero text (AGENT_RULES 5), so the count is pips: one dim
+   * dot per death, and every tenth death collapses into one bright dot on the
+   * row above.  Reads at a glance up to a few hundred, which is more deaths
+   * than any run will survive the patience for. */
+  function drawDeathTally(ctx, u, y, alpha) {
+    var n = (NA.Game && NA.Game.deaths) | 0;
+    if (n <= 0) return;
+    var tens = (n / 10) | 0, ones = n % 10;
+    var cx = NA.R.w * 0.5, gap = 11 * u, i, x0;
+    ctx.save();
+    if (tens > 0) {
+      var tn = Math.min(tens, 40);
+      x0 = cx - (tn - 1) * gap * 0.5;
+      ctx.fillStyle = hx('gold');
+      for (i = 0; i < tn; i++) {
+        ctx.globalAlpha = alpha;
+        ctx.beginPath(); ctx.arc(x0 + i * gap, y, 3.4 * u, 0, M.TAU); ctx.fill();
+      }
+    }
+    if (ones > 0) {
+      x0 = cx - (ones - 1) * gap * 0.5;
+      ctx.fillStyle = hx('white');
+      for (i = 0; i < ones; i++) {
+        ctx.globalAlpha = alpha * 0.5;
+        ctx.beginPath();
+        ctx.arc(x0 + i * gap, y + (tens > 0 ? 13 * u : 0), 2.4 * u, 0, M.TAU);
+        ctx.fill();
+      }
+    }
+    ctx.globalAlpha = 1;
+    ctx.restore();
+  }
+
   function drawDeathOverlay(ctx, I, u) {
     var G = NA.Game; if (!G) return;
+    if (UI.gate.active) {
+      /* the continue gate reads as the endless glyph: the run does not end */
+      var pc = w2s(UI.gate.x, UI.gate.y);
+      I.draw(ctx, 'infinity', pc.x, pc.y, 44 * u,
+        { color: hx('gold'), glow: pulse(0.8, 0.55, 0.9), alpha: 0.95 });
+    }
+    if (UI.gate2.active) {
+      var pr = w2s(UI.gate2.x, UI.gate2.y);
+      I.draw(ctx, 'reroll', pr.x, pr.y, 32 * u, { color: hx('white'), glow: 0.4, alpha: 0.7 });
+    }
     if (UI.gate3.active) {
       var ph = w2s(UI.gate3.x, UI.gate3.y);
       I.draw(ctx, 'home', ph.x, ph.y, 34 * u, { color: hx('player'), glow: 0.5, alpha: 0.85 });
     }
+    drawDeathTally(ctx, u, 26 * u, 0.75);
     var picks = G.picks || [];
     if (!picks.length) return;
     /* the upgrade timeline strip: what you took, in the order you took it */
@@ -30185,6 +30279,8 @@ window.NA = window.NA || {};
       I.boss(ctx, bosses[i], ctr.x + Math.cos(a2) * rr2, ctr.y + Math.sin(a2) * rr2, 34 * u,
         { color: hx('gold'), alpha: 0.8 * fade * k2 });
     }
+    /* the run's death tally, under the upgrade ring */
+    drawDeathTally(ctx, u, NA.R.h - 120 * u, 0.85 * fade);
     if (UI.endPhase >= 6) {
       /* the Encore hex peeking through the crack */
       var pe = w2s(cx, cy - 250);
@@ -30642,6 +30738,8 @@ window.NA = window.NA || {};
  *   NA.Game.picks / bossesBeaten  this run's history (used by death + ending)
  *   NA.Game.replay / replayN / replayHead / REPLAY_MAX / killerX / killerY
  *   NA.Game.nextDraftCards        set to 4/5 to widen the next draft
+ *   NA.Game.continueRun()         infinite lives: replay the wave you died on
+ *   NA.Game.deaths                deaths so far this run (shown at the end)
  *   NA.Game.step(dt)   one fixed simulation step
  *   NA.Game.render()
  *   NA.Game.frame(ts)  the rAF callback (installed by 99_boot.js)
@@ -30710,6 +30808,7 @@ window.NA = window.NA || {};
       NA.UI.reset();
       NA.Time.setTimeScale(1);
       G.wave = 0;
+      G.deaths = 0;
       G.paused = false; G.endless = false; G.newRecord = false;
       G.picks.length = 0; G.bossesBeaten.length = 0;
       G.replayN = 0; G.replayHead = 0; G._replayT = 0;
@@ -30751,6 +30850,37 @@ window.NA = window.NA || {};
       G.newRun();
       NA.Cam.setZoom(1, 0);
       G.startWave(1);
+    },
+
+    /* ------------------------------------------------- infinite lives
+     * Owner request: dying never ends the run.  The death screen's primary
+     * gate calls this: the wave you died on restarts with your build, your
+     * picks and your boss log intact, the death counter ticks up by one, and
+     * the counter is what the ending screen reports instead of a life total.
+     * Nothing is taken away from you here (AGENT_RULES 7) -- the only cost of
+     * a death is the number on the wall at the end. */
+    continueRun: function () {
+      var w = G.wave || 1;
+      NA.Enemies.reset();
+      NA.Bullets.reset();
+      NA.Particles.clear();
+      NA.Bosses.clear();
+      NA.Events.reset();
+      NA.FX.reset();
+      NA.UI.reset();
+      NA.Player.reset();
+      NA.Upgrades.reapply();          // the build survives; stats come back
+      NA.R.setPost({ darkness: 0, desat: 0 });
+      if (NA.Audio && NA.Audio.music && NA.Audio.music.setLowpass) NA.Audio.music.setLowpass(0);
+      G.paused = false;
+      G._draftReturn = '';
+      NA.Time.setTimeScale(1);
+      NA.Cam.x = NA.Cam.tx = NA.Player.x; NA.Cam.y = NA.Cam.ty = NA.Player.y;
+      NA.Cam.setZoom(1, 0);
+      // a boss wave re-enters through toBoss so the fight is rebuilt properly
+      var wd = NA.Waves.get(w);
+      if (wd && wd.boss) { G.wave = w; NA.Waves.start(w); G.toBoss(); }
+      else G.startWave(w);
     },
 
     /* Dev entry: ?wave=N starts there with a plausible build. */
@@ -31183,6 +31313,9 @@ window.NA = window.NA || {};
 
   // player death routes into the death state
   G.on('playerDeath', function () {
+    G.deaths = (G.deaths | 0) + 1;   // counted here so the death screen's own
+                                     // tally already includes the death you
+                                     // are looking at
     G.findKiller();
     G.saveRunRecord();
     if (NA.Audio && NA.Audio.music && NA.Audio.music.setLowpass) NA.Audio.music.setLowpass(0.8);

@@ -226,6 +226,31 @@
       s.pierce += m.pierce; s.bounce += m.bounce; s.homing += m.homing;
       s.explode += m.explodeRadius; s.count += m.count; s.spread += m.spread;
       if (s.count > 1 && s.spread <= 0) s.spread = 0.12;
+      /* ------------------------------------------------------- RESONANCE
+       * Owner request: a stacked build has to become uniquely overpowered,
+       * not merely additive.  Every tier you own -- of anything -- feeds one
+       * superlinear multiplier applied AFTER the mods fold, so the curve is
+       * flat at the start of a run and vertical at the end of one.
+       *
+       *   T tiers owned:  dmg x (1 + 0.05*T + 0.004*T^2)
+       *     T=3  -> 1.19x     T=10 -> 1.90x
+       *     T=20 -> 3.60x     T=32 -> 6.70x
+       *
+       * Fire rate rides a gentler linear curve (the sim, the audio and the
+       * bullet pools all have to survive it), and every 9th tier hands out a
+       * free pierce, which is what actually turns a late build into a beam.
+       * Nothing here can go down: this is purely additive on top of the
+       * build you chose (AGENT_RULES 7). */
+      var T = 0;
+      for (var rid in U.owned) T += U.owned[rid] | 0;
+      if (T > 0) {
+        s.damage *= 1 + 0.05 * T + 0.004 * T * T;
+        s.fireRate *= 1 + 0.020 * T;
+        s.pierce += (T / 9) | 0;
+        s.manaTrickle *= 1 + 0.020 * T;
+      }
+      U.resonance = T;
+
       var st = U.statics;
       for (k in st) st[k] = s[k];
       NA.Player.grazeMul = s.grazeMul;
@@ -306,7 +331,7 @@
      */
     offer: function (count, rng) {
       rng = rng || NA.RNG;
-      count = count || ((NA.Game && NA.Game.wave && NA.Game.wave % 6 === 0) ? 4 : 3);
+      count = count || 5;
       var out = OUT; out.length = 0;
       var pool = POOL; pool.length = 0;
       var i, id, d;

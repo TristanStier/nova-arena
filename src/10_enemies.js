@@ -544,15 +544,22 @@
     if (vn > 0) { P.vx[i] -= nx * vn; P.vy[i] -= ny * vn; }
   }
 
+  /* Pacing pass (owner request): every NON-BOSS enemy is a little bigger, so
+   * it is easier to hit at the wider camera, and a little faster, so waves
+   * come to you instead of being chased.  One funnel, so it covers all 42
+   * enemy defs plus anything a boss spawns as a minion.  Bosses have their own
+   * registry (13_bosses.js) and are untouched. */
+  var SIZE_MUL = 1.25, SPEED_MUL = 1.12;
+
   function normalize(id, def) {
     var d = def || {};
     return {
       id: id,
       shape: d.shape || 'circle',
       color: d.color || C.COL.white,
-      size: d.size || 12,
+      size: (d.size || 12) * SIZE_MUL,
       hp: d.hp || 10,
-      speed: d.speed || 100,
+      speed: (d.speed || 100) * SPEED_MUL,
       cost: d.cost || 1,
       band: d.band || 'A',
       retireWave: d.retireWave || 0,

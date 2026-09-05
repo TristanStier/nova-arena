@@ -1,8 +1,8 @@
-NOVA ARENA build report  2026-09-05T17:16:47.461Z
+NOVA ARENA build report  2026-09-05T17:48:29.313Z
 file                       lines     bytes      KiB
 ---------------------------------------------------
 00_shell.html                 55      2181      2.1
-01_core.js                   450     19758     19.3
+01_core.js                   454     20457     20.0
 02_render.js                1146     52117     50.9
 03_audio.js                 1425     55246     54.0
 04_icons.js                 1593     61863     60.4
@@ -11,10 +11,10 @@ file                       lines     bytes      KiB
 07_fx.js                     258     10767     10.5
 08_bullets.js                368     17856     17.4
 09_player.js                 496     23596     23.0
-10_enemies.js                679     32069     31.3
+10_enemies.js                686     32505     31.7
 10b_enemies_ab.js           1158     52132     50.9
 10c_enemies_cde.js          2143     98128     95.8
-11_upgrades.js              2616    114034    111.4
+11_upgrades.js              2641    117785    115.0
 11b_upgrades_b.js           2194     95616     93.4
 11c_upgrade_text.js          398     13231     12.9
 12_events.js                2212     97138     94.9
@@ -23,10 +23,10 @@ file                       lines     bytes      KiB
 13c_bosses_2.js             3080    132274    129.2
 13d_bosses_3.js             2774    118955    116.2
 14_waves.js                 1541     73211     71.5
-15_ui.js                    2431    104384    101.9
-16_game.js                   602     25196     24.6
+15_ui.js                    2491    109671    107.1
+16_game.js                   639     27017     26.4
 98_bot.js                    877     40994     40.0
 99_boot.js                   242     10689     10.4
 ---------------------------------------------------
-TOTAL js                   32270   1392597   1360.0
-nova-arena.html            32353   1395600   1362.9
+TOTAL js                   32403   1404591   1371.7
+nova-arena.html            32486   1407591   1374.6
