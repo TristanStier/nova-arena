@@ -205,29 +205,42 @@
 
         // enemies
         if (eg && NA.Enemies.n > 0) {
-          var cnt = eg.query(P.x[i], P.y[i], P.size[i] + 46);
+          /* Swept test: a fast bullet moves further per frame (~29u at base
+           * speed, more with upgrades or a long frame) than a small enemy is
+           * wide, so a point test at the new position tunnels straight
+           * through edges. Test the whole px,py -> x,y segment instead. */
+          var sx0 = P.px[i], sy0 = P.py[i];
+          var sdx = P.x[i] - sx0, sdy = P.y[i] - sy0;
+          var slen2 = sdx * sdx + sdy * sdy;
+          var cnt = eg.query((sx0 + P.x[i]) * 0.5, (sy0 + P.y[i]) * 0.5,
+            P.size[i] + 46 + Math.sqrt(slen2) * 0.5);
           var out = eg.out, dead = false;
           for (var q = 0; q < cnt; q++) {
             var ei = out[q];
             if (ei >= NA.Enemies.n) continue;
             if (NA.Enemies.intangible[ei] > 0) continue;
             var rr2 = P.size[i] + NA.Enemies.size[ei];
-            var ddx = NA.Enemies.x[ei] - P.x[i], ddy = NA.Enemies.y[ei] - P.y[i];
+            // closest point on the travel segment to this enemy
+            var t = slen2 > 0
+              ? M.clamp01(((NA.Enemies.x[ei] - sx0) * sdx + (NA.Enemies.y[ei] - sy0) * sdy) / slen2)
+              : 0;
+            var hx = sx0 + sdx * t, hy = sy0 + sdy * t;
+            var ddx = NA.Enemies.x[ei] - hx, ddy = NA.Enemies.y[ei] - hy;
             if (ddx * ddx + ddy * ddy > rr2 * rr2) continue;
-            if (NA.Enemies.shielded(ei, P.x[i], P.y[i])) continue;
+            if (NA.Enemies.shielded(ei, hx, hy)) continue;
 
             /* The sky is an information source: a Pulsar wedge / Ion Storm /
              * on-beat window multiplies what lands here (GAME_PLAN §10.3). */
             var dmg = P.dmg[i];
             if (NA.Events && NA.Events.hasDamageField) dmg *= NA.Events.damageMulAt(P.x[i], P.y[i]);
-            HCTX.x = P.x[i]; HCTX.y = P.y[i]; HCTX.bi = i; HCTX.ei = ei; HCTX.dmg = dmg;
+            HCTX.x = hx; HCTX.y = hy; HCTX.bi = i; HCTX.ei = ei; HCTX.dmg = dmg;
             HCTX.owner = 0; HCTX.kill = false;
             HCTX.nx = ddx; HCTX.ny = ddy;
             /* damage() -> kill() -> onDeath and the onHit hooks can both free
              * player bullets (a hook that fires, explodes or resets the pool).
              * Stamp the generation and re-validate before touching slot i, or
              * the pierce decrement / free lands on somebody else's bullet. */
-            var bg0 = P.gen[i], bx0 = P.x[i], by0 = P.y[i], bex = P.explode[i];
+            var bg0 = P.gen[i], bx0 = hx, by0 = hy, bex = P.explode[i];
             var killed = NA.Enemies.damage(ei, dmg, 'player');
             HCTX.kill = killed;
             B.hits++;

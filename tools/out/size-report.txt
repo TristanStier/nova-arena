@@ -1,4 +1,4 @@
-NOVA ARENA build report  2026-09-05T17:13:32.559Z
+NOVA ARENA build report  2026-09-05T17:16:47.461Z
 file                       lines     bytes      KiB
 ---------------------------------------------------
 00_shell.html                 55      2181      2.1
@@ -9,7 +9,7 @@ file                       lines     bytes      KiB
 05_pools.js                  139      5554      5.4
 06_arena.js                  371     16583     16.2
 07_fx.js                     258     10767     10.5
-08_bullets.js                355     17093     16.7
+08_bullets.js                368     17856     17.4
 09_player.js                 496     23596     23.0
 10_enemies.js                679     32069     31.3
 10b_enemies_ab.js           1158     52132     50.9
@@ -28,5 +28,5 @@ file                       lines     bytes      KiB
 98_bot.js                    877     40994     40.0
 99_boot.js                   242     10689     10.4
 ---------------------------------------------------
-TOTAL js                   32257   1391834   1359.2
-nova-arena.html            32340   1394837   1362.1
+TOTAL js                   32270   1392597   1360.0
+nova-arena.html            32353   1395600   1362.9
