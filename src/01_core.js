@@ -257,13 +257,22 @@ NA.Store = {
   settings: {
     volMaster: 0.8, volMusic: 0.6, volSfx: 0.9,
     shake: 1, flash: 1, quality: 3, colorblind: 0,
-    reticle: 1, autofire: 1, hints: 1, damageNumbers: 0
+    reticle: 1, autofire: 0, hints: 1, damageNumbers: 0,
+    /* bumped whenever a default changes in a way an existing save must adopt;
+     * see load(). 2 = auto-fire off by default (hold to shoot). */
+    sv: 2
   },
   records: { best: 0, beat30: 0, seen: {} },
   load: function () {
     try {
       var s = localStorage.getItem('na.settings');
-      if (s) { var o = JSON.parse(s); for (var k in o) if (k in this.settings) this.settings[k] = o[k]; }
+      if (s) {
+        var o = JSON.parse(s);
+        for (var k in o) if (k in this.settings) this.settings[k] = o[k];
+        /* A save written before a default changed keeps the OLD value forever,
+         * because the merge above always wins. Adopt the new default once. */
+        if ((o.sv | 0) < 2) { this.settings.autofire = 0; this.settings.sv = 2; this.save(); }
+      }
       var r = localStorage.getItem('na.records');
       if (r) { var q = JSON.parse(r); for (var j in q) this.records[j] = q[j]; }
     } catch (e) { }

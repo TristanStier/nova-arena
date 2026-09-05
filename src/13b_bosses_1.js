@@ -2295,7 +2295,7 @@
     // ---- record ----------------------------------------------------------
     var h = d.head;
     d.rx[h] = px(); d.ry[h] = py(); d.ra[h] = NA.Player.angle;
-    d.rf[h] = (NA.Player.alive && (NA.Input.isDown('fire') || (NA.Store.settings.autofire !== false))) ? 1 : 0;
+    d.rf[h] = (NA.Player.alive && (NA.Input.isDown('fire') || !!NA.Store.settings.autofire)) ? 1 : 0;
     d.head = (h + 1) % US_CAP;
     if (d.filled < US_CAP) d.filled++;
 
