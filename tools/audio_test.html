@@ -1,0 +1,195 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>NOVA ARENA — audio bench</title>
+<style>
+  :root { color-scheme: dark; }
+  body {
+    margin: 0; padding: 18px 20px 60px;
+    background: #0b0d12; color: #cfd6e4;
+    font: 13px/1.5 ui-monospace, Menlo, Consolas, monospace;
+  }
+  h1 { font-size: 15px; letter-spacing: .18em; text-transform: uppercase; color: #7fe3ff; margin: 0 0 4px; }
+  p.sub { margin: 0 0 18px; color: #6a7488; }
+  fieldset { border: 1px solid #1e2735; border-radius: 6px; margin: 0 0 16px; padding: 12px 14px 14px; }
+  legend { color: #7fe3ff; letter-spacing: .12em; text-transform: uppercase; font-size: 11px; padding: 0 6px; }
+  button {
+    font: inherit; color: #cfd6e4; background: #151b26;
+    border: 1px solid #2a3546; border-radius: 4px;
+    padding: 6px 10px; margin: 0 6px 6px 0; cursor: pointer;
+  }
+  button:hover { background: #1e2735; border-color: #3d4d66; color: #fff; }
+  button:active { background: #7fe3ff; color: #08101a; }
+  button.wide { min-width: 130px; }
+  label { display: inline-flex; align-items: center; gap: 8px; margin: 0 18px 8px 0; }
+  select, input[type=range] { font: inherit; accent-color: #7fe3ff; }
+  select { background: #151b26; color: #cfd6e4; border: 1px solid #2a3546; border-radius: 4px; padding: 4px 6px; }
+  .row { display: flex; flex-wrap: wrap; align-items: center; }
+  .val { color: #7fe3ff; min-width: 42px; display: inline-block; text-align: right; }
+  #beats { display: flex; gap: 10px; align-items: center; margin-top: 6px; }
+  .pip { width: 20px; height: 20px; border-radius: 50%; background: #1b2434; border: 1px solid #2a3546; transition: background .06s; }
+  .pip.on { background: #7fe3ff; box-shadow: 0 0 14px #7fe3ff88; }
+  #meta { color: #6a7488; }
+  #meta b { color: #cfd6e4; font-weight: normal; }
+  .warn { color: #ffb454; }
+</style>
+</head>
+<body>
+
+<h1>Nova Arena — audio bench</h1>
+<p class="sub">Click anywhere first (browsers need a gesture before audio starts). <span id="state" class="warn">context: not started</span></p>
+
+<fieldset>
+  <legend>Master</legend>
+  <div class="row">
+    <label>master <input id="vMaster" type="range" min="0" max="1" step="0.01" value="0.8"><span class="val" id="vMasterV">0.80</span></label>
+    <label>music  <input id="vMusic"  type="range" min="0" max="1" step="0.01" value="0.55"><span class="val" id="vMusicV">0.55</span></label>
+    <label>sfx    <input id="vSfx"    type="range" min="0" max="1" step="0.01" value="0.9"><span class="val" id="vSfxV">0.90</span></label>
+  </div>
+  <div class="row">
+    <label>time scale <input id="ts" type="range" min="0.1" max="2" step="0.01" value="1"><span class="val" id="tsV">1.00</span></label>
+    <label>pan x <input id="px" type="range" min="-1200" max="1200" step="10" value="0"><span class="val" id="pxV">0</span></label>
+    <button id="duck">duck 6dB / 300ms</button>
+  </div>
+  <div id="meta">voices <b id="voices">0</b> · beat <b id="beatN">0</b> · bar <b id="barN">0</b></div>
+</fieldset>
+
+<fieldset>
+  <legend>Music</legend>
+  <div class="row">
+    <button id="mStart">start</button>
+    <button id="mStop">stop</button>
+    <label>mode
+      <select id="mode">
+        <option>dorian</option><option>lydian</option><option>phrygian</option>
+        <option>aeolian</option><option>mixolydian</option><option>finale</option>
+      </select>
+    </label>
+    <label>bpm <input id="bpm" type="range" min="60" max="200" step="1" value="120"><span class="val" id="bpmV">120</span></label>
+  </div>
+  <div class="row">
+    <label>intensity <input id="inten" type="range" min="0" max="1" step="0.01" value="0.3"><span class="val" id="intenV">0.30</span></label>
+    <label>lowpass   <input id="lp"    type="range" min="0" max="1" step="0.01" value="0"><span class="val" id="lpV">0.00</span></label>
+  </div>
+  <div class="row">
+    <button id="stWave">stinger waveClear</button>
+    <button id="stBoss">stinger bossDeath</button>
+    <button id="stVic">stinger victory</button>
+  </div>
+  <div id="beats">
+    <span class="pip" data-b="0"></span><span class="pip" data-b="1"></span>
+    <span class="pip" data-b="2"></span><span class="pip" data-b="3"></span>
+  </div>
+</fieldset>
+
+<fieldset>
+  <legend>Combos</legend>
+  <div class="row" id="combos"></div>
+</fieldset>
+
+<fieldset>
+  <legend>SFX (all names)</legend>
+  <div class="row" id="sfxButtons"></div>
+</fieldset>
+
+<script src="../src/03_audio.js"></script>
+<script>
+(function () {
+  var A = window.NA.Audio;
+  var panX = 0;
+
+  function start() { A.init(); }
+  document.addEventListener('pointerdown', start, { once: false });
+
+  // ---- sfx buttons -------------------------------------------------------
+  var host = document.getElementById('sfxButtons');
+  A.names.forEach(function (name) {
+    var b = document.createElement('button');
+    b.className = 'wide';
+    b.textContent = name;
+    b.onclick = function () {
+      A.init();
+      A.sfx(name, { x: panX, y: 0, tier: 2, dur: name === 'laser' ? 0.6 : undefined });
+    };
+    host.appendChild(b);
+  });
+
+  // ---- combo ladder ------------------------------------------------------
+  var combos = document.getElementById('combos');
+  for (var i = 0; i <= 8; i++) {
+    (function (n) {
+      var b = document.createElement('button');
+      b.textContent = 'killCombo ' + n;
+      b.onclick = function () { A.init(); A.killCombo(n, { x: panX, y: 0 }); };
+      combos.appendChild(b);
+    })(i);
+  }
+  var chain = document.createElement('button');
+  chain.textContent = 'chain 0..8';
+  chain.onclick = function () {
+    A.init();
+    for (var k = 0; k <= 8; k++) {
+      (function (n) { setTimeout(function () { A.killCombo(n, { x: panX, y: 0 }); }, n * 120); })(k);
+    }
+  };
+  combos.appendChild(chain);
+
+  // ---- sliders -----------------------------------------------------------
+  function bind(id, fn, fmt) {
+    var el = document.getElementById(id), out = document.getElementById(id + 'V');
+    var apply = function () {
+      var v = parseFloat(el.value);
+      if (out) out.textContent = fmt ? fmt(v) : v.toFixed(2);
+      fn(v);
+    };
+    el.addEventListener('input', apply);
+    apply();
+  }
+  var f2 = null, i0 = function (v) { return String(v | 0); };
+
+  bind('vMaster', function () { pushVolumes(); }, f2);
+  bind('vMusic',  function () { pushVolumes(); }, f2);
+  bind('vSfx',    function () { pushVolumes(); }, f2);
+  function pushVolumes() {
+    A.setVolumes({
+      master: parseFloat(document.getElementById('vMaster').value),
+      music:  parseFloat(document.getElementById('vMusic').value),
+      sfx:    parseFloat(document.getElementById('vSfx').value)
+    });
+  }
+
+  bind('ts',    function (v) { A.setTimeScale(v); }, f2);
+  bind('px',    function (v) { panX = v; }, i0);
+  bind('inten', function (v) { A.music.setIntensity(v); }, f2);
+  bind('lp',    function (v) { A.music.setLowpass(v); }, f2);
+  bind('bpm',   function (v) { A.music.setBpm(v); }, i0);
+
+  document.getElementById('duck').onclick = function () { A.init(); A.duck(6, 300); };
+  document.getElementById('mStart').onclick = function () { A.init(); A.music.start(); };
+  document.getElementById('mStop').onclick  = function () { A.music.stop(); };
+  document.getElementById('mode').onchange  = function (e) { A.music.setMode(e.target.value); };
+  document.getElementById('stWave').onclick = function () { A.init(); A.music.stinger('waveClear'); };
+  document.getElementById('stBoss').onclick = function () { A.init(); A.music.stinger('bossDeath'); };
+  document.getElementById('stVic').onclick  = function () { A.init(); A.music.stinger('victory'); };
+
+  // ---- beat indicator ----------------------------------------------------
+  var pips = document.querySelectorAll('.pip');
+  A.music.onBeat(function (beat) {
+    var idx = beat % 4;
+    for (var i = 0; i < pips.length; i++) pips[i].classList.toggle('on', i === idx);
+  });
+
+  // ---- readouts ----------------------------------------------------------
+  setInterval(function () {
+    document.getElementById('voices').textContent = A.voiceCount();
+    document.getElementById('beatN').textContent = A.music.beat;
+    document.getElementById('barN').textContent = A.music.bar;
+    var s = document.getElementById('state');
+    if (A.ctx) { s.textContent = 'context: ' + A.ctx.state; s.className = A.ctx.state === 'running' ? '' : 'warn'; }
+  }, 120);
+})();
+</script>
+</body>
+</html>

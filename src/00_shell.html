@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=no">
+<title>NOVA ARENA</title>
+<style>
+  html, body {
+    margin: 0; padding: 0; width: 100%; height: 100%;
+    background: #05060A; overflow: hidden;
+    /* the game shows no text; this stack only exists for the ?debug=1 overlay */
+    font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+    color: #4DF3FF;
+    -webkit-user-select: none; user-select: none;
+    touch-action: none; overscroll-behavior: none;
+  }
+  #wrap { position: fixed; inset: 0; }
+  canvas { position: absolute; left: 0; top: 0; width: 100%; height: 100%; display: block; }
+  #gl { z-index: 1; }
+  #ui { z-index: 2; pointer-events: none; }
+  /* fourth-wall DOM effects live here (boss 11/20/24) */
+  #dom { position: absolute; inset: 0; z-index: 3; pointer-events: none; overflow: hidden; }
+  #dom .na-tear { position: absolute; background: #05060A; border: 1px solid #FF3CAC; }
+  /* dev only */
+  #dbg {
+    position: absolute; left: 8px; top: 8px; z-index: 9;
+    font-size: 11px; line-height: 1.35; white-space: pre;
+    color: #7fe9ff; text-shadow: 0 0 6px #067; pointer-events: none; display: none;
+  }
+  #err {
+    position: absolute; left: 8px; bottom: 8px; right: 8px; max-height: 40%;
+    z-index: 10; font-size: 11px; line-height: 1.4; white-space: pre-wrap;
+    color: #FF6E86; background: rgba(20,4,10,.86); border: 1px solid #FF2E4D;
+    padding: 6px 8px; overflow: auto; display: none;
+  }
+  /* The OS cursor is hidden only while you are actually flying (the ship's
+   * reticle is the cursor there). Every menu-ish state — title, draft, pause,
+   * death, ending — turns it back on; NA.Game.frame owns the toggle. */
+  body.na-cursor-none { cursor: none; }
+  body.na-cursor-show { cursor: default; }
+  body.na-dim { filter: brightness(.35); transition: filter .4s linear; }
+</style>
+</head>
+<body>
+<div id="wrap">
+  <canvas id="gl"></canvas>
+  <canvas id="ui"></canvas>
+  <div id="dom"></div>
+  <div id="dbg"></div>
+  <div id="err"></div>
+</div>
+<!--NA_SCRIPT-->
+</body>
+</html>

@@ -1,0 +1,142 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>NOVA ARENA - icon sheet</title>
+<style>
+  html,body{margin:0;padding:0;background:#05060A;color:#7fa;font-family:monospace;}
+  canvas{display:block;}
+</style>
+</head>
+<body>
+<canvas id="c" width="1600" height="2000"></canvas>
+<script src="../src/04_icons.js"></script>
+<script>
+var c = document.getElementById('c');
+var ctx = c.getContext('2d');
+var I = NA.Icons;
+var WILD = {ghostRounds:1, claustrophobia:1, glassHull:1, berserk:1, feedbackLoop:1, gambler:1};
+
+var COLS = 13, CELL = 116, X0 = 40, y = 0;
+
+function bg(){ ctx.fillStyle = '#05060A'; ctx.fillRect(0,0,c.width,c.height); }
+function label(t, x, yy, col){
+  ctx.save(); ctx.fillStyle = col||'#5c7d8a'; ctx.font='10px monospace'; ctx.textAlign='center';
+  ctx.fillText(t, x, yy); ctx.restore();
+}
+function header(t){
+  y += 26;
+  ctx.save(); ctx.fillStyle='#2b3d47'; ctx.fillRect(X0-16, y-14, 1520, 1);
+  ctx.fillStyle='#8fd7e6'; ctx.font='13px monospace'; ctx.textAlign='left';
+  ctx.fillText(t, X0-16, y+2); ctx.restore();
+  y += 20;
+}
+
+bg();
+y = 30;
+
+// ---------------------------------------------------------------- tier row
+header('TIER 1 / 2 / 3  (frame + fill + stacked outlines)');
+var demo = ['twinBarrels','blast','chrono','afterburner','shardOrbit','gambler'];
+var i, t, x;
+for (i = 0; i < demo.length; i++) {
+  for (t = 1; t <= 3; t++) {
+    x = X0 + (i*3 + t-1) * 84 + 42;
+    I.draw(ctx, demo[i], x, y + 44, 64, {tier:t, frame:true, wild:WILD[demo[i]]?true:false, glow:0.5});
+    label(demo[i].slice(0,9)+' T'+t, x, y + 92);
+  }
+}
+y += 104;
+
+// ------------------------------------------------------------ upgrades 64
+header('42 UPGRADES @ 64  (framed, tier 2, glow)');
+for (i = 0; i < I.ids.length; i++) {
+  var cx = X0 + (i % COLS) * CELL + CELL/2;
+  var cy = y + Math.floor(i / COLS) * 106 + 44;
+  I.draw(ctx, I.ids[i], cx, cy, 64, {tier:2, frame:true, wild:WILD[I.ids[i]]?true:false, glow:0.55});
+  label(I.ids[i], cx, cy + 50);
+}
+y += Math.ceil(I.ids.length / COLS) * 106 + 10;
+
+// ------------------------------------------------------------ upgrades 32
+header('42 UPGRADES @ 32  (no frame - legibility check)');
+for (i = 0; i < I.ids.length; i++) {
+  var cx2 = X0 + (i % 21) * 70 + 35;
+  var cy2 = y + Math.floor(i / 21) * 62 + 22;
+  I.draw(ctx, I.ids[i], cx2, cy2, 32, {tier:2, glow:0.4});
+  label(I.ids[i].slice(0,11), cx2, cy2 + 26);
+}
+y += Math.ceil(I.ids.length / 21) * 62 + 10;
+
+// ------------------------------------------------------------------- UI
+header('UI / SETTINGS ICONS @ 64 and @ 32');
+for (i = 0; i < I.uiIds.length; i++) {
+  var ux = X0 + (i % COLS) * CELL + CELL/2;
+  var uy = y + Math.floor(i / COLS) * 106 + 40;
+  I.draw(ctx, I.uiIds[i], ux, uy, 64, {glow:0.45});
+  I.draw(ctx, I.uiIds[i], ux + 44, uy + 16, 32, {glow:0.3});
+  label(I.uiIds[i], ux, uy + 48);
+}
+y += Math.ceil(I.uiIds.length / COLS) * 106 + 10;
+
+// ---------------------------------------------------------------- bosses
+header('25 BOSSES @ 64  (spiked frame)');
+for (i = 0; i < I.bossIds.length; i++) {
+  var bx = X0 + (i % COLS) * CELL + CELL/2;
+  var by = y + Math.floor(i / COLS) * 106 + 44;
+  I.boss(ctx, I.bossIds[i], bx, by, 64, {tier:2, glow:0.5});
+  label(I.bossIds[i], bx, by + 50);
+}
+y += Math.ceil(I.bossIds.length / COLS) * 106 + 10;
+
+// --------------------------------------------------------------- enemies
+header('ENEMY SHAPES @ 64 (framed) and @ 32');
+for (i = 0; i < I.enemyShapes.length; i++) {
+  var ex = X0 + i * CELL + CELL/2;
+  var ey = y + 44;
+  I.enemy(ctx, I.enemyShapes[i], ex, ey, 64, {tier:2, frame:true, glow:0.5});
+  I.enemy(ctx, I.enemyShapes[i], ex + 44, ey + 16, 32, {tier:2, glow:0.3});
+  label(I.enemyShapes[i], ex, ey + 50);
+}
+y += 106;
+
+// ---------------------------------------------------------------- digits
+header('DIGITS 0-9, NUMBER, RADIAL SLIDERS');
+for (i = 0; i < 10; i++) {
+  I.digit(ctx, i, X0 + i * 44 + 16, y + 30, 44, {glow:0.4});
+}
+I.number(ctx, 1234567890, X0 + 560, y + 30, 34, {glow:0.4, color:'#FFD84D'});
+I.number(ctx, 30, X0 + 880, y + 30, 44, {glow:0.5});
+var sv = [0, 0.25, 0.5, 0.75, 1];
+for (i = 0; i < sv.length; i++) {
+  I.slider(ctx, X0 + 980 + i * 70, y + 30, 56, sv[i], '#4DF3FF');
+  I.draw(ctx, 'volMaster', X0 + 980 + i * 70, y + 30, 26, {});
+}
+y += 80;
+
+// ------------------------------------------------------------------ ship
+header('SHIP @ 96 and @ 48 - all slots at tier 0 / 1 / 2 / 3');
+var SLOTS = ['trail','aura','halo','wings','fins','hull','barrels','core','orbitals','crown'];
+for (t = 0; t <= 3; t++) {
+  var s = {};
+  for (i = 0; i < SLOTS.length; i++) s[SLOTS[i]] = t;
+  var sx = X0 + 70 + t * 150;
+  I.ship(ctx, sx, y + 60, 120, s, {glow:0.55});
+  I.ship(ctx, sx + 62, y + 100, 48, s, {glow:0.3});
+  label('all slots T' + t, sx, y + 128);
+}
+// a couple of realistic mixed builds
+var builds = [
+  {barrels:2, core:2, fins:1},
+  {trail:3, wings:2, halo:1, core:3, barrels:1},
+  {orbitals:3, aura:2, halo:3, crown:1, hull:2, core:2, barrels:3, wings:3, fins:3, trail:2}
+];
+for (i = 0; i < builds.length; i++) {
+  var mx = X0 + 700 + i * 150;
+  I.ship(ctx, mx, y + 60, 120, builds[i], {glow:0.55});
+  label('build ' + (i+1), mx, y + 128);
+}
+y += 150;
+</script>
+</body>
+</html>

@@ -1,0 +1,5 @@
+node_modules/
+
+# Generated screenshots from tools/build.js + smoke tests
+tools/out/*.png
+tools/out/*.jpg
